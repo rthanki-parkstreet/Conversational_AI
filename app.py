@@ -30,7 +30,7 @@ file_handler.setFormatter(formatter)
 # Add the file handler to the logger
 logger.addHandler(file_handler)
 
-groq_key = "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"
+groq_key = "*****"
 client = Groq(api_key=groq_key)
 
 # Initialize the pygame mixer

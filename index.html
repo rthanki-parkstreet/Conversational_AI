@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Conversational AI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.1);
+        }
+
+        .conversation {
+            margin-top: 20px;
+            overflow-y: scroll;
+            max-height: 300px;
+        }
+
+        .message {
+            margin: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #f4f4f4; /* Light Blue */
+            color:black;
+            text-align: right;
+            align-self: flex-end;
+        }
+
+        .bot-message {
+            background-color: #ad946d; /* Soft Peach */
+            color: #fff;
+            align-self: flex-start;
+        }
+
+
+        button {
+            background-color: #49994b;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button.recording {
+            background-color: #ff5722;
+        }
+
+        p {
+            margin: 10px 0;
+        }
+
+        audio {
+            margin-top: 20px;
+            display: block;
+            width: 100%;
+        }
+        .user-icon {
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .bot-icon {
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Conversational AI Demo</h1>
+        <button id="startRecordingButton" onclick="startRecording()">🎤 Start Recording</button>
+        <button id="stopRecordingButton" onclick="stopRecording()" style="display: none;">⏹️ Stop Recording</button>
+        <div class="conversation" id="conversation"></div>
+        <audio id="responseAudio" controls></audio>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let conversationMessages = []; // Array to store conversation messages
+
+        function startRecording() {
+            // Clear conversation when starting recording
+            document.getElementById('conversation').innerHTML = "";
+            document.getElementById('responseAudio').src = "";
+            document.getElementById('startRecordingButton').style.display = "none";
+            document.getElementById('stopRecordingButton').style.display = "block";
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+                    isRecording = true;
+                    updateRecordingButtonStyle();
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        audioChunks = [];
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'input.wav');
+                        fetch('/process_audio', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            displayMessage(data.request_text, 'user-message');
+                            setTimeout(() => {
+                                displayMessage(data.response_text, 'bot-message');
+                                document.getElementById('responseAudio').src = data.audio_url + '?t=' + new Date().getTime(); // Append timestamp to URL
+                                document.getElementById('responseAudio').play(); // Automatically play the response audio
+                            }, 1000);
+                            isRecording = false;
+                            updateRecordingButtonStyle();
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                        });
+                    };
+                });
+        }
+
+        function stopRecording() {
+            if (mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                document.getElementById('startRecordingButton').style.display = "block";
+                document.getElementById('stopRecordingButton').style.display = "none";
+            } else {
+                console.log("No recording in progress.");
+            }
+        }
+
+        function updateRecordingButtonStyle() {
+            const startRecordingButton = document.getElementById('startRecordingButton');
+            if (isRecording) {
+                startRecordingButton.innerText = "🔄 Processing...";
+                startRecordingButton.disabled = true;
+            } else {
+                startRecordingButton.innerText = "🎤 Start Recording";
+                startRecordingButton.disabled = false;
+            }
+        }
+
+        function displayMessage(message, className) {
+            const conversationDiv = document.getElementById('conversation');
+            const messageDiv = document.createElement('div');
+            messageDiv.textContent = message;
+            messageDiv.classList.add('message', className);
+
+            // Add icons based on message type
+            if (className === 'user-message') {
+                const userIcon = document.createElement('span');
+                userIcon.innerHTML = '👤'; // Icon for user input
+                userIcon.classList.add('user-icon');
+                messageDiv.prepend(userIcon);
+            } else if (className === 'bot-message') {
+                const botIcon = document.createElement('span');
+                botIcon.innerHTML = '🤖'; // Icon for bot response
+                botIcon.classList.add('bot-icon');
+                messageDiv.prepend(botIcon);
+            }
+
+            conversationMessages.push(messageDiv.outerHTML); // Add message to array
+            conversationDiv.innerHTML = conversationMessages.join(''); // Display all messages in array
+            conversationDiv.scrollTop = conversationDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>
